@@ -1,17 +1,14 @@
 package it.univaq.se4gd.rec.marketplace.invoice
 
+import it.univaq.se4gd.rec.marketplace.pricing.PriceService
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Component
 import java.sql.ResultSet
 import java.sql.Timestamp
 
-val SAME_COMMUNITY_PRICE = 1.0
-val OTHER_COMMUNITY_PRICE = 2.0
-val COMPANY_PRICE = 3.0
-
 @Component
-class InvoiceService(val db: JdbcTemplate) {
+class InvoiceService(val db: JdbcTemplate, val priceService: PriceService) {
     val consumptionHistoryRowMapper: RowMapper<ConsumptionHistory> = RowMapper<ConsumptionHistory> { resultSet: ResultSet, _: Int ->
         ConsumptionHistory(resultSet.getInt("sellerCommunityId"), resultSet.getInt("sellerHouseId"), resultSet.getInt("buyerCommunityId"), resultSet.getInt("buyerHouseId"), resultSet.getDouble("energyConsumed"), resultSet.getDouble("energyConsumed"), resultSet.getTimestamp("consumptionTime"))
     }
@@ -42,11 +39,11 @@ class InvoiceService(val db: JdbcTemplate) {
         return if(communityId == transactingCommunityId && houseId == transactingHouseId) {
             0.0
         } else if(communityId == transactingCommunityId) {
-            SAME_COMMUNITY_PRICE * units
+            priceService.sameCommunityPrice() * units
         } else if(transactingCommunityId != -1) {
-            OTHER_COMMUNITY_PRICE * units
+            priceService.otherCommunityPrice() * units
         } else {
-            COMPANY_PRICE * units
+            priceService.companyPrice() * units
         }
     }
 

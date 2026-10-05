@@ -13,6 +13,8 @@ services:
       - SPRING_DATASOURCE_USERNAME=compose-postgres
       - SPRING_DATASOURCE_PASSWORD=compose-postgres
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      # eu-power-poc (github.com/JonathanThangadurai/eu-power-poc) runs on the host, not in this compose network.
+      - EU_PRICE_API_URL=http://host.docker.internal:8001
     ports:
       - 8080:8080
 
