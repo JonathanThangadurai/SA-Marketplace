@@ -16,7 +16,7 @@ class ConsumptionService(val db: JdbcTemplate, val priceService: PriceService) {
     }
 
     val consumptionHistoryRowMapper: RowMapper<ConsumptionHistory> = RowMapper<ConsumptionHistory> { resultSet: ResultSet, _: Int ->
-        ConsumptionHistory(resultSet.getInt("sellerCommunityId"), resultSet.getInt("sellerHouseId"), resultSet.getInt("buyerCommunityId"), resultSet.getInt("buyerHouseId"), resultSet.getDouble("energyConsumed"), resultSet.getDouble("energyConsumed"), resultSet.getTimestamp("consumptionTime"))
+        ConsumptionHistory(resultSet.getInt("sellerCommunityId"), resultSet.getInt("sellerHouseId"), resultSet.getInt("buyerCommunityId"), resultSet.getInt("buyerHouseId"), resultSet.getDouble("energyConsumed"), resultSet.getDouble("price"), resultSet.getTimestamp("consumptionTime"))
     }
 
     @Transactional
@@ -24,42 +24,30 @@ class ConsumptionService(val db: JdbcTemplate, val priceService: PriceService) {
         val consumptions = consume(communityId, houseId, energyNeed, Level.HOUSE)
         consumptions.filter { it.consumed > 0.0 }
                 .forEach {
-                    db.update("insert into consumptions values (?, ?, ?, ?, ?, ?)", communityId, houseId, it.communityId, it.houseId, it.consumed, Timestamp(System.currentTimeMillis()))
+                    val price = priceFor(it.from, it.consumed)
+                    db.update(
+                            "insert into consumptions (buyerCommunityId, buyerHouseId, sellerCommunityId, sellerHouseId, energyConsumed, consumptionTime, price) values (?, ?, ?, ?, ?, ?, ?)",
+                            communityId, houseId, it.communityId, it.houseId, it.consumed, Timestamp(System.currentTimeMillis()), price
+                    )
                 }
         return consumptions
     }
 
     fun getConsumptionHistory(communityId: Int, houseId: Int): List<ConsumptionHistory> {
-        val consumptionHistories = db.query("select * from consumptions where buyerCommunityId=$communityId and buyerHouseId=$houseId ORDER BY consumptionTime DESC", consumptionHistoryRowMapper)
-        return updatePrice(communityId, houseId, consumptionHistories)
+        return db.query("select * from consumptions where buyerCommunityId=$communityId and buyerHouseId=$houseId ORDER BY consumptionTime DESC", consumptionHistoryRowMapper)
     }
 
     fun getCreditHistory(communityId: Int, houseId: Int): List<ConsumptionHistory> {
-        val creditHistories = db.query("select * from consumptions where sellerCommunityId=$communityId and sellerHouseId=$houseId ORDER BY consumptionTime DESC", consumptionHistoryRowMapper)
-        return updateCredit(communityId, houseId, creditHistories)
+        return db.query("select * from consumptions where sellerCommunityId=$communityId and sellerHouseId=$houseId ORDER BY consumptionTime DESC", consumptionHistoryRowMapper)
     }
 
-    private fun updatePrice(communityId: Int, houseId: Int, histories: List<ConsumptionHistory>): List<ConsumptionHistory> {
-        return histories.map {
-            it.copy(price = getPrice(communityId, houseId, it.sellerCommunityId, it.sellerHouseId, it.units))
-        }
-    }
-
-    private fun updateCredit(communityId: Int, houseId: Int, histories: List<ConsumptionHistory>): List<ConsumptionHistory> {
-        return histories.map {
-            it.copy(price = getPrice(communityId, houseId, it.buyerCommunityId, it.buyerHouseId, it.units))
-        }
-    }
-
-    private fun getPrice(communityId: Int, houseId: Int, transactingCommunityId: Int, transactingHouseId: Int, units: Double): Double {
-        return if(communityId == transactingCommunityId && houseId == transactingHouseId) {
-            0.0
-        } else if(communityId == transactingCommunityId) {
-            priceService.sameCommunityPrice() * units
-        } else if(transactingCommunityId != -1) {
-            priceService.otherCommunityPrice() * units
-        } else {
-            priceService.companyPrice() * units
+    /** Price locked in at the moment a trade happens - never recomputed later from the live price. */
+    private fun priceFor(level: Level, units: Double): Double {
+        return when (level) {
+            Level.HOUSE -> 0.0
+            Level.SAME_COMMUNITY -> priceService.sameCommunityPrice() * units
+            Level.OTHER_COMMUNITY -> priceService.otherCommunityPrice() * units
+            Level.COMPANY -> priceService.companyPrice() * units
         }
     }
 

@@ -1,6 +1,5 @@
 package it.univaq.se4gd.rec.marketplace.invoice
 
-import it.univaq.se4gd.rec.marketplace.pricing.PriceService
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Component
@@ -8,43 +7,20 @@ import java.sql.ResultSet
 import java.sql.Timestamp
 
 @Component
-class InvoiceService(val db: JdbcTemplate, val priceService: PriceService) {
+class InvoiceService(val db: JdbcTemplate) {
     val consumptionHistoryRowMapper: RowMapper<ConsumptionHistory> = RowMapper<ConsumptionHistory> { resultSet: ResultSet, _: Int ->
-        ConsumptionHistory(resultSet.getInt("sellerCommunityId"), resultSet.getInt("sellerHouseId"), resultSet.getInt("buyerCommunityId"), resultSet.getInt("buyerHouseId"), resultSet.getDouble("energyConsumed"), resultSet.getDouble("energyConsumed"), resultSet.getTimestamp("consumptionTime"))
+        ConsumptionHistory(resultSet.getInt("sellerCommunityId"), resultSet.getInt("sellerHouseId"), resultSet.getInt("buyerCommunityId"), resultSet.getInt("buyerHouseId"), resultSet.getDouble("energyConsumed"), resultSet.getDouble("price"), resultSet.getTimestamp("consumptionTime"))
     }
 
+    // Price is read straight from the stored column - it was locked in by ConsumptionService
+    // at the moment the trade happened, so an invoice for a past period never changes just
+    // because the live price has moved on since.
     fun getConsumptionHistory(communityId: Int, houseId: Int): List<ConsumptionHistory> {
-        val consumptionHistories = db.query("select * from consumptions where buyerCommunityId=$communityId and buyerHouseId=$houseId ORDER BY consumptionTime DESC", consumptionHistoryRowMapper)
-        return updatePrice(communityId, houseId, consumptionHistories)
+        return db.query("select * from consumptions where buyerCommunityId=$communityId and buyerHouseId=$houseId ORDER BY consumptionTime DESC", consumptionHistoryRowMapper)
     }
 
     fun getCreditHistory(communityId: Int, houseId: Int): List<ConsumptionHistory> {
-        val creditHistories = db.query("select * from consumptions where sellerCommunityId=$communityId and sellerHouseId=$houseId ORDER BY consumptionTime DESC", consumptionHistoryRowMapper)
-        return updateCredit(communityId, houseId, creditHistories)
-    }
-
-    private fun updatePrice(communityId: Int, houseId: Int, histories: List<ConsumptionHistory>): List<ConsumptionHistory> {
-        return histories.map {
-            it.copy(price = getPrice(communityId, houseId, it.sellerCommunityId, it.sellerHouseId, it.units))
-        }
-    }
-
-    private fun updateCredit(communityId: Int, houseId: Int, histories: List<ConsumptionHistory>): List<ConsumptionHistory> {
-        return histories.map {
-            it.copy(price = getPrice(communityId, houseId, it.buyerCommunityId, it.buyerHouseId, it.units))
-        }
-    }
-
-    private fun getPrice(communityId: Int, houseId: Int, transactingCommunityId: Int, transactingHouseId: Int, units: Double): Double {
-        return if(communityId == transactingCommunityId && houseId == transactingHouseId) {
-            0.0
-        } else if(communityId == transactingCommunityId) {
-            priceService.sameCommunityPrice() * units
-        } else if(transactingCommunityId != -1) {
-            priceService.otherCommunityPrice() * units
-        } else {
-            priceService.companyPrice() * units
-        }
+        return db.query("select * from consumptions where sellerCommunityId=$communityId and sellerHouseId=$houseId ORDER BY consumptionTime DESC", consumptionHistoryRowMapper)
     }
 
 }

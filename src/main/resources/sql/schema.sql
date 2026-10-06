@@ -19,5 +19,8 @@ CREATE TABLE IF NOT EXISTS consumptions (
     sellerCommunityId INT NOT NULL,
     sellerHouseId INT NOT NULL,
     energyConsumed DECIMAL NOT NULL,
-    consumptionTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    consumptionTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Price at the moment this trade happened. Historical trades must never be
+    -- repriced using today's live price - see PriceService / ConsumptionService.
+    price DECIMAL NOT NULL DEFAULT 0
 );

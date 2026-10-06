@@ -28,8 +28,9 @@ data class CurrentPriceResponse(
  *
  * A short in-memory cache avoids hammering the price API on every request (the
  * SA-Runner load generator calls consume/produce every couple of seconds). If the
- * price API is unreachable, a logged fallback price keeps the marketplace usable
- * instead of failing every transaction.
+ * price API is unreachable, the last known good price is reused (re-cached for
+ * another window, so a sustained outage doesn't retry on every single call); the
+ * fixed fallback price only kicks in if no price has ever been fetched at all.
  */
 @Component
 class PriceService(
@@ -59,8 +60,17 @@ class PriceService(
             cachedAt = now
             price
         } catch (ex: Exception) {
-            log.warn("Could not reach EU price API at {}, using fallback price {}: {}", priceApiUrl, fallbackPrice, ex.message)
-            cachedPrice ?: fallbackPrice
+            val stale = cachedPrice
+            // Re-stamp cachedAt even on failure so a sustained outage retries at most
+            // once per cache window, not on every single call.
+            cachedAt = now
+            if (stale != null) {
+                log.warn("Could not reach EU price API at {}, reusing last known price {}: {}", priceApiUrl, stale, ex.message)
+                stale
+            } else {
+                log.warn("Could not reach EU price API at {}, no price ever fetched - using fixed fallback {}: {}", priceApiUrl, fallbackPrice, ex.message)
+                fallbackPrice
+            }
         }
     }
 
