@@ -49,10 +49,12 @@ placeholder for "regulated by the market price," not the thing itself.
   an invoice for a past trade must not silently change amount because the market moved
   since. `consumptions` gained a `price` column for exactly this.
 - **[SA-Runner](https://github.com/JonathanThangadurai/SA-Runner)**'s `solar-and-demand-response`
-  branch gives the production/consumption simulators a lighter nod to Beehive's planned
-  "Prediction/Recommendation" service (weather-informed usage timing, never built in the
-  original prototype): production follows a solar curve instead of flat noise, and
-  consumption responds to the live price - real demand response, not an ML model, but
+  branch replaces every synthetic production/consumption value with a real one: 36 real
+  households' actual metered solar output and usage (Ausgrid's public "Solar home electricity
+  data," CC BY 3.0 AU), replayed half-hour by half-hour instead of a random draw or a formula -
+  see that repo's README for the full provenance and the season-shift that keeps a real Sydney
+  household's data consistent with the Netherlands' actual seasons. Consumption also responds to
+  the live NL price on top of that real baseline - genuine demand response, not an ML model, but
   driven by the same real signal.
 
 ## Installation Steps
